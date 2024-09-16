@@ -21,6 +21,13 @@
       border: 1px solid #ddd;
       margin-bottom: 10px;
     }
+    #dropArea {
+      background-color: #f9f9f9;
+      cursor: pointer;
+    }
+    #imageUpload {
+      display: none; /* Hide the input */
+    }
   </style>
 </head>
 <body>
@@ -30,18 +37,18 @@
   
   <!-- Drop Area -->
   <div class="mb-4">
-    <label for="imageUpload" class="form-label">Select Images or Drag & Drop</label>
-    <input class="form-control" type="file" id="imageUpload" multiple accept="image/*">
-    <div id="dropArea" class="border rounded p-4 text-center my-3" style="background-color: #f9f9f9;">
-      <p>Drag & Drop your images here</p>
+    <div id="dropArea" class="border rounded p-4 text-center my-3">
+      <p>Click or Drag & Drop your images here</p>
     </div>
+    <input class="form-control" type="file" id="imageUpload" multiple accept="image/*">
   </div>
 
   <!-- Preview and Progress -->
   <div class="preview-container row" id="previewContainer"></div>
 
-  <!-- Download Button -->
+  <!-- Buttons -->
   <button id="downloadZip" class="btn btn-primary mt-4" style="display:none;">Download All as ZIP</button>
+  <button id="clearAll" class="btn btn-danger mt-4" style="display:none;">Clear All</button>
 
 </div>
 
@@ -53,6 +60,7 @@
     const imageUpload = $('#imageUpload');
     const previewContainer = $('#previewContainer');
     const downloadButton = $('#downloadZip');
+    const clearButton = $('#clearAll');
     let processingQueue = Promise.resolve();
     const zip = new JSZip();
     const zipFolder = zip.folder('converted_images');
@@ -75,7 +83,12 @@
       handleFiles(e.originalEvent.dataTransfer.files);
     });
 
-    // Handle file selection
+    // Trigger file input when drop area is clicked
+    dropArea.on('click', function () {
+      imageUpload.click();
+    });
+
+    // Handle file selection via input
     imageUpload.on('change', function () {
       handleFiles(this.files);
     });
@@ -86,6 +99,7 @@
       Array.from(files).forEach(file => {
         previewImage(file);
       });
+      clearButton.show();  // Show clear button when files are added
     }
 
     // Preview image, show progress, and process one by one
@@ -170,6 +184,17 @@
         link.download = 'converted_images.zip';
         link.click();
       });
+    });
+
+    // Clear all images and reset everything
+    clearButton.on('click', function () {
+      previewContainer.empty(); // Remove all preview elements
+      downloadButton.hide(); // Hide download button
+      clearButton.hide(); // Hide clear button
+      imageUpload.val(''); // Reset the file input
+      processedCount = 0; // Reset processed count
+      zipFolder.remove(); // Clear the ZIP folder
+      zip.folder('converted_images'); // Create a new folder for next session
     });
   });
 </script>
