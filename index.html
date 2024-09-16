@@ -114,12 +114,10 @@
           img.onload = function () {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const width = img.width > 800 ? 800 : img.width; // Resize if width > 800px
-            const height = (img.height * width) / img.width;
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = img.width;  // Use original width
+            canvas.height = img.height; // Use original height
 
-            ctx.drawImage(img, 0, 0, width, height);
+            ctx.drawImage(img, 0, 0, img.width, img.height);
 
             // Convert to WebP format
             canvas.toBlob((blob) => {
