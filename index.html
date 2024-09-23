@@ -167,6 +167,48 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+  // Define a global object to store shared variables and functions
+  const ImageOptimizer = {
+    zip: new JSZip(),
+    processedCount: 0,
+    totalFiles: 0,
+
+    handleFiles: function(files) {
+      this.totalFiles = files.length;
+      $('#previewContainer').empty(); // Clear previous previews
+      this.zip = new JSZip(); // Reset ZIP
+      this.zip.folder('converted_images'); // Create a new folder for current session
+      this.processedCount = 0; // Reset processed count
+      Array.from(files).forEach(file => {
+        this.previewImage(file);
+      });
+      $('#optionsModal').modal('show'); // Show modal for compress/convert options
+      $('#clearAll').prop('disabled', false);  // Enable clear button when files are added
+    },
+
+    previewImage: function(file) {
+      const reader = new FileReader();
+      const imageId = 'img_' + Math.random().toString(36).substr(2, 9);
+
+      reader.onload = function (e) {
+        const previewHtml = `
+          <div class="col-md-3 p-0 image-preview rounded" id="${imageId}">
+            <img src="${e.target.result}" alt="preview" />
+            <div class="progress mt-2">
+              <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+            <div class="download-btn">
+                <span class="iconify icon me-2" data-icon="lucide:download"></span>
+            </div>
+          </div>
+        `;
+        $('#previewContainer').append(previewHtml);
+      };
+
+      reader.readAsDataURL(file);
+    }
+  };
+
   $(document).ready(function () {
     const dropArea = $('#dropArea');
     const imageUpload = $('#imageUpload');
@@ -180,14 +222,11 @@
     const convertQualityInput = $('#convertQuality');
     const startProcessButton = $('#startProcess');
     let processingQueue = Promise.resolve();
-    const zip = new JSZip();
-    const zipFolder = zip.folder('converted_images');
-    let processedCount = 0;
-    let totalFiles = 0;
     let compress = false;
     let convert = false;
     let compressLevel = 0.8;
     let convertQuality = 0.8;
+    let files = []; // Store the files globally
 
     // Enable/disable compression input based on checkbox
     compressCheck.on('change', function () {
@@ -212,7 +251,7 @@
     dropArea.on('drop', function (e) {
       e.preventDefault();
       dropArea.removeClass('border-primary');
-      handleFiles(e.originalEvent.dataTransfer.files);
+      ImageOptimizer.handleFiles(e.originalEvent.dataTransfer.files);
     });
 
     // Trigger file input when drop area is clicked
@@ -222,49 +261,33 @@
 
     // Handle file selection via input
     imageUpload.on('change', function () {
-      handleFiles(this.files);
+      ImageOptimizer.handleFiles(this.files);
     });
 
-    // Handle images files
-    function handleFiles(files) {
-      totalFiles = files.length;
-      previewContainer.empty(); // Clear previous previews
-      zipFolder.remove(); // Remove previous ZIP folder contents
-      zip.folder('converted_images'); // Create a new folder for current session
-      processedCount = 0; // Reset processed count
-      Array.from(files).forEach(file => {
-        previewImage(file);
+    // Update handleFiles function
+    ImageOptimizer.handleFiles = function(newFiles) {
+      files = Array.from(newFiles); // Store files for later use
+      this.totalFiles = files.length;
+      $('#previewContainer').empty();
+      this.zip = new JSZip();
+      this.zip.folder('converted_images');
+      this.processedCount = 0;
+      files.forEach(file => {
+        this.previewImage(file);
       });
-      optionsModal.show(); // Show modal for compress/convert options
-      clearButton.prop('disabled', false);  // Enable clear button when files are added
-    }
-
-    // Preview image
-    function previewImage(file) {
-      const reader = new FileReader();
-      const imageId = 'img_' + Math.random().toString(36).substr(2, 9);
-
-      reader.onload = function (e) {
-                const previewHtml = `
-          <div class="col-md-3 p-0 image-preview rounded" id="${imageId}">
-            <img src="${e.target.result}" alt="preview" />
-            <div class="progress mt-2">
-              <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-            </div>
-            <div class="download-btn">
-                <span class="iconify icon me-2" data-icon="lucide:download"></span>
-            </div>
-          </div>
-        `;
-        previewContainer.append(previewHtml);
-      };
-
-      reader.readAsDataURL(file);
-    }
+      $('#optionsModal').modal('show');
+      $('#clearAll').prop('disabled', false);
+    };
 
     // Process (compress/convert) images
     function processImage(file, imageId) {
       return new Promise((resolve) => {
+        if (!(file instanceof Blob)) {
+          console.error('Invalid file object:', file);
+          resolve();
+          return;
+        }
+
         const img = new Image();
         const reader = new FileReader();
         const progressBar = $(`#${imageId} .progress .progress-bar`);
@@ -289,7 +312,7 @@
               const newFileName = convert ? file.name.replace(/\.[^/.]+$/, ".webp") : file.name;
 
               // Add the image to the ZIP folder
-              zipFolder.file(newFileName, blob);
+              ImageOptimizer.zip.folder('converted_images').file(newFileName, blob);
 
               // Simulate async processing time and update progress
               let progress = 0;
@@ -299,11 +322,11 @@
 
                 if (progress >= 100) {
                   clearInterval(interval);
-                  processedCount++;
+                  ImageOptimizer.processedCount++;
                   resolve();
 
                   // If all files are processed, enable the download button
-                  if (processedCount === totalFiles) {
+                  if (ImageOptimizer.processedCount === ImageOptimizer.totalFiles) {
                     downloadButton.prop('disabled', false);
                   }
 
@@ -320,6 +343,11 @@
 
             }, format, quality); // Use the selected format and quality
           };
+        };
+
+        reader.onerror = function (error) {
+          console.error('Error reading file:', error);
+          resolve();
         };
 
         reader.readAsDataURL(file);
@@ -343,16 +371,18 @@
       optionsModal.hide();
 
       // Process each image
-      previewContainer.children('.image-preview').each(function () {
+      $('#previewContainer').children('.image-preview').each(function (index) {
         const imageId = $(this).attr('id');
-        const file = imageUpload[0].files[previewContainer.children().index(this)];
-        processingQueue = processingQueue.then(() => processImage(file, imageId));
+        const file = files[index]; // Use the stored files
+        if (file) {
+          processingQueue = processingQueue.then(() => processImage(file, imageId));
+        }
       });
     });
 
     // Download ZIP when all images are processed
     downloadButton.on('click', function () {
-      zip.generateAsync({ type: 'blob' }).then(function (content) {
+      ImageOptimizer.zip.generateAsync({ type: 'blob' }).then(function (content) {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(content);
         link.download = 'optimized_images.zip';
@@ -366,9 +396,9 @@
       downloadButton.prop('disabled', true); // Disable download button
       clearButton.prop('disabled', true); // Disable clear button
       imageUpload.val(''); // Reset the file input
-      zipFolder.remove(); // Clear the ZIP folder
-      zip.folder('converted_images'); // Create a new folder for next session
-      processedCount = 0; // Reset processed count
+      ImageOptimizer.zip.folder('converted_images').remove(); // Clear the ZIP folder
+      ImageOptimizer.zip.folder('converted_images'); // Create a new folder for next session
+      ImageOptimizer.processedCount = 0; // Reset processed count
     });
   });
 </script>
