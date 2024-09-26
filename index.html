@@ -150,9 +150,26 @@
             <input type="number" class="form-control" id="convertQuality" value="0.8" step="0.1" min="0.1" max="1" disabled>
           </div>
 
+          <!-- New Scale option -->
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" value="" id="scaleCheck">
+            <label class="form-check-label" for="scaleCheck">
+              Scale Images
+            </label>
+          </div>
+          <div class="mb-3">
+            <label for="scaleResolution" class="form-label">Scale to Resolution</label>
+            <select class="form-select" id="scaleResolution" disabled>
+              <option value="sd">SD (640x480)</option>
+              <option value="hd">HD (1280x720)</option>
+              <option value="fhd">FHD (1920x1080)</option>
+              <option value="2k">2K (2560x1440)</option>
+            </select>
+          </div>
+
           <!-- Error message if no option is selected -->
           <div id="errorAlert" class="alert alert-danger" style="display: none;">
-            You must select at least one option (Compress or Convert).
+            You must select at least one option (Compress, Convert, or Scale).
           </div>
 
           <!-- Start Process Button -->
@@ -220,12 +237,16 @@
     const compressLevelInput = $('#compressLevel');
     const convertCheck = $('#convertCheck');
     const convertQualityInput = $('#convertQuality');
+    const scaleCheck = $('#scaleCheck');
+    const scaleResolutionSelect = $('#scaleResolution');
     const startProcessButton = $('#startProcess');
     let processingQueue = Promise.resolve();
     let compress = false;
     let convert = false;
+    let scale = false;
     let compressLevel = 0.8;
     let convertQuality = 0.8;
+    let scaleResolution = 'hd';
     let files = []; // Store the files globally
 
     // Enable/disable compression input based on checkbox
@@ -236,6 +257,11 @@
     // Enable/disable conversion input based on checkbox
     convertCheck.on('change', function () {
       convertQualityInput.prop('disabled', !this.checked);
+    });
+
+    // Enable/disable scale resolution select based on checkbox
+    scaleCheck.on('change', function () {
+      scaleResolutionSelect.prop('disabled', !this.checked);
     });
 
     // Handle drag & drop events
@@ -299,10 +325,49 @@
           img.onload = function () {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = img.width;  // Use original width
-            canvas.height = img.height; // Use original height
 
-            ctx.drawImage(img, 0, 0, img.width, img.height);
+            let newWidth = img.width;
+            let newHeight = img.height;
+
+            // Apply scaling if selected and image is larger than target resolution
+            if (scale) {
+              let targetWidth, targetHeight;
+              switch (scaleResolution) {
+                case 'sd':
+                  targetWidth = 640;
+                  targetHeight = 480;
+                  break;
+                case 'hd':
+                  targetWidth = 1280;
+                  targetHeight = 720;
+                  break;
+                case 'fhd':
+                  targetWidth = 1920;
+                  targetHeight = 1080;
+                  break;
+                case '2k':
+                  targetWidth = 2560;
+                  targetHeight = 1440;
+                  break;
+              }
+              
+              const aspectRatio = img.width / img.height;
+              const targetAspectRatio = targetWidth / targetHeight;
+
+              if (img.width > targetWidth || img.height > targetHeight) {
+                if (aspectRatio > targetAspectRatio) {
+                  newWidth = targetWidth;
+                  newHeight = newWidth / aspectRatio;
+                } else {
+                  newHeight = targetHeight;
+                  newWidth = newHeight * aspectRatio;
+                }
+              }
+            }
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
             // Convert to WebP format if selected
             const format = convert ? 'image/webp' : 'image/jpeg';
@@ -341,7 +406,7 @@
                 }
               }, 500);
 
-            }, format, quality); // Use the selected format and quality
+            }, format, quality);
           };
         };
 
@@ -358,11 +423,13 @@
     startProcessButton.on('click', function () {
       compress = compressCheck.is(':checked');
       convert = convertCheck.is(':checked');
+      scale = scaleCheck.is(':checked');
       compressLevel = parseFloat(compressLevelInput.val());
       convertQuality = parseFloat(convertQualityInput.val());
+      scaleResolution = scaleResolutionSelect.val();
 
       // Ensure the user selects at least one option
-      if (!compress && !convert) {
+      if (!compress && !convert && !scale) {
         $('#errorAlert').show();
         return;
       }
